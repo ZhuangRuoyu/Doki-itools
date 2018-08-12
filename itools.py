@@ -679,9 +679,11 @@ class dokiLogin(object):
     def __init__(self, object):
         self.home_url = 'https://v.qq.com/x/star/1661556?tabid=3'
         ## self.driver = webdriver.Chrome(executable_path = os.getcwd() + '/chromedriver')
-        self.driver = object.tab2_driver
+        self.driver = object.tab_driver
         self.to_continue = False
         self.frozen_count = 0
+        self.wait_l = WebDriverWait(self.driver, 10)
+        self.wait_s = WebDriverWait(self.driver, 1)
 
     def get_account_info(self, filename):
         try:
@@ -697,8 +699,7 @@ class dokiLogin(object):
     def is_login(self):
         try:
             self.driver.switch_to.default_content()
-            time.sleep(0.5)
-            return self.driver.find_element_by_xpath("//a[@id='mod_head_notice_trigger']/img").get_attribute("src") != "https://i.gtimg.cn/qqlive/images/20150608/avatar.png"
+            return self.wait_s.until(EC.presence_of_element_located((By.XPATH, "//a[@id='mod_head_notice_trigger']/img"))).get_attribute("src") != "https://i.gtimg.cn/qqlive/images/20150608/avatar.png"
         except:
             return False
 
@@ -735,7 +736,7 @@ class dokiLogin(object):
         im1 = Image.open('Image/fullbg.jpg')
         im2 = Image.open('Image/bg.jpg')
         scale = bg.size.get("width")/im2.size[0]
-        distance = (self.get_gap(im1, im2) * 1 * scale) - 12
+        distance = (self.get_gap(im1, im2) * 1.005 * scale) - 12
         return distance
 
     def get_track(self, distance):
@@ -788,21 +789,19 @@ class dokiLogin(object):
 
     def captcha_check(self):
         self.driver.switch_to.default_content()
-        time.sleep(0.5)
-        self.driver.switch_to.frame("_login_frame_quick_")
-        time.sleep(0.5)
-        self.driver.switch_to.frame(self.driver.find_element_by_tag_name("iframe"))
-        time.sleep(1)
-        bg = self.driver.find_element_by_id("slideBkg")
+        self.wait_l.until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "#_login_frame_quick_")))
+        #time.sleep(0.5)
+        #self.driver.switch_to.frame(self.driver.find_element_by_tag_name("iframe"))
+        self.wait_l.until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "iframe")))
+        bg = self.wait_l.until(EC.presence_of_element_located((By.ID, "slideBkg")))
         self.download_images(bg)
 
         distance = self.cal_dist(bg)
-        slider = self.driver.find_element_by_id("tcaptcha_drag_button")
+        slider = self.wait_l.until(EC.element_to_be_clickable((By.ID, "tcaptcha_drag_button")))
         tracks = self.get_track(distance/2)
 
         times = 0
         while times < 3:
-            time.sleep(0.5)
             action = ActionChains(self.driver)
             action.click_and_hold(slider).perform()
             action.reset_actions()
@@ -812,17 +811,15 @@ class dokiLogin(object):
                 action.reset_actions()
             time.sleep(0.5)
             action.release().perform()
-            time.sleep(2)
 
             try:
-                alert = self.driver.find_element_by_class_name('tcaptcha-title').text
+                alert = self.wait_s.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".tcaptcha-title"))).text
             except Exception as e:
                 alert = ''
             if alert:
                 #print('滑块位移需要调整：%s' % alert)
-                distance -= 2
+                distance -= 1
                 times += 1
-                time.sleep(1)
             else:
                 #print('滑块验证通过')
                 return True
@@ -834,30 +831,20 @@ class dokiLogin(object):
 
     def check_frozen(self):
         self.driver.switch_to.default_content()
-        time.sleep(1)
-        self.driver.switch_to.frame("_login_frame_quick_")
-        time.sleep(0.5)
+        self.wait_l.until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "#_login_frame_quick_")))
         try:
-            self.driver.find_element_by_link_text("点击这里")
+            self.wait_s.until(EC.presence_of_element_located((By.LINK_TEXT, "点击这里")))
             return True
         except Exception:
             return False
 
+
     def frame_relogin(self, user, pw):
         self.driver.switch_to.default_content()
-        time.sleep(1)
-        self.driver.switch_to.frame("_login_frame_quick_")
-        time.sleep(0.5)
-        # self.driver.find_element_by_id("u").clear()
-        # time.sleep(1)
-        # self.driver.find_element_by_id("u").send_keys(user)
-        # time.sleep(1)
-        # self.driver.find_element_by_id("p").clear()
-        # time.sleep(1)
-        self.driver.find_element_by_id("p").send_keys(pw)
-        time.sleep(0.5)
-        self.driver.find_element_by_id("login_button").click()
-        time.sleep(1)
+        self.wait_l.until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "#_login_frame_quick_")))
+        self.wait_l.until(EC.presence_of_element_located((By.ID, "p"))).clear()
+        self.wait_l.until(EC.presence_of_element_located((By.ID, "p"))).send_keys(pw)
+        self.wait_l.until(EC.element_to_be_clickable((By.ID, "login_button"))).click()
         try:
             if self.is_login():
                 #print("帐号" + str(user) + "已成功登录！")
@@ -883,6 +870,7 @@ class dokiLogin(object):
         except Exception:
             return False
 
+
     # def check_captcha_tab(self):
     #     try:
     #         self.driver.switch_to.frame("_login_frame_quick_")
@@ -900,18 +888,24 @@ class dokiLogin(object):
             self.to_continue = True
             return True
         else:
-            self.driver.find_element_by_id("mod_head_notice_trigger").click()
-            self.driver.find_element_by_class_name("_login_type_item").click()
-            self.driver.switch_to.frame("_login_frame_quick_")
-            time.sleep(0.5)
-            self.driver.find_element_by_link_text('帐号密码登录').click()
-            time.sleep(0.5)
-            self.driver.find_element_by_id("u").send_keys(user)
-            time.sleep(1)
-            self.driver.find_element_by_id("p").send_keys(pw)
-            time.sleep(1)
-            self.driver.find_element_by_id("login_button").click()
-            time.sleep(1)
+            self.wait_l.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#mod_head_notice_trigger'))).click()
+            # self.driver.find_element_by_id("mod_head_notice_trigger").click()
+            self.wait_l.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "._login_type_item"))).click()
+            # self.driver.switch_to.frame("_login_frame_quick_")
+            self.wait_l.until(EC.frame_to_be_available_and_switch_to_it((By.CSS_SELECTOR, "#_login_frame_quick_")))
+            #time.sleep(0.5)
+            self.wait_l.until(EC.element_to_be_clickable((By.LINK_TEXT, "帐号密码登录"))).click()
+            #self.driver.find_element_by_link_text('帐号密码登录').click()
+            #time.sleep(0.5)
+            self.wait_l.until(EC.presence_of_element_located((By.ID, "u"))).send_keys(user)
+            #self.driver.find_element_by_id("u").send_keys(user)
+            #time.sleep(1)
+            self.wait_l.until(EC.presence_of_element_located((By.ID, "p"))).send_keys(pw)
+            #self.driver.find_element_by_id("p").send_keys(pw)
+            #time.sleep(1)
+            self.wait_l.until(EC.element_to_be_clickable((By.ID, "login_button"))).click()
+            #self.driver.find_element_by_id("login_button").click()
+            #time.sleep(1)
             if self.is_login():
                 #print("帐号" + str(user) + "已成功登录！")
                 self.to_continue = True
@@ -995,7 +989,7 @@ class ApplicationUI():
 
 
 	def listen_for_result(self):
-		self.tab1_loop_time = self.tab1_loop_time + 1
+
 		self.root.after(1000, self.listen_for_result)
 		if self.tab1_timing == True:
 			self.tab1_now_time = self.tab1_now_time + 1
@@ -1046,16 +1040,10 @@ class ApplicationUI():
 		about_menu = Menu(menu,tearoff=0)
 		about_menu.add_command(label="为了涵涵秃头！！！")
 
-		author_menu = Menu(menu,tearoff=0)
-		author_menu.add_command(label="@AskeyNil：完成基本功能，GUI界面搭建")
-		author_menu.add_command(label="@一棵木鱼：完成自动登录部分验证码识别")
-
-
 		#在菜单栏中添加以下一级菜单
 		menu.add_cascade(label="评论",menu=talk_menu)
 		menu.add_cascade(label="发帖",menu=send_menu)
 		menu.add_cascade(label="关于",menu=about_menu)
-		menu.add_cascade(label="作者微博：@AskeyNil,@一棵木鱼",menu=author_menu)
 		self.root['menu'] = menu
 
 
@@ -1083,19 +1071,29 @@ class ApplicationUI():
 		rightView.grid_propagate(0)
 		# 建立左边的界面
 
+        # 登录label
+		self.tab1_account_text = StringVar()
+		Label(leftView, textvariable=self.tab1_account_text).grid(sticky=W)
+		self.tab1_account_text.set("帐户信息：")
+        # 自动登录账户的list
+		self.tab1_accounts_list_value = StringVar()
+		Listbox(leftView,listvariable=self.tab1_accounts_list_value,width=70,height=10).grid(row=1)
+
+
+
 		# 评论链接Label
 		self.tab1_talk_link_text = StringVar()
-		Label(leftView, textvariable=self.tab1_talk_link_text).grid(sticky=W)
+		Label(leftView, textvariable=self.tab1_talk_link_text).grid(row=2, sticky=W)
 		self.tab1_talk_link_text.set("评论链接：")
 		# 评论链接的list
 		self.tab1_link_list_value = StringVar()
-		Listbox(leftView,listvariable=self.tab1_link_list_value,width=70,height=15).grid(row=1)
+		Listbox(leftView,listvariable=self.tab1_link_list_value,width=70,height=10).grid(row=3)
 
 		# 话术文本的label和list
-		Label(leftView,text="话术文本：").grid(row=2,sticky=W)
+		Label(leftView,text="话术文本：").grid(row=4,sticky=W)
 		self.tab1_talk_list_value = StringVar()
 		self.tab1_talk_list_value.set(tuple(all_talks))
-		listbox = Listbox(leftView,listvariable=self.tab1_talk_list_value, width=70,height=15).grid(row=3)
+		listbox = Listbox(leftView,listvariable=self.tab1_talk_list_value, width=70,height=10).grid(row=5)
 
 
 		topView = Frame(rightView)
@@ -1104,17 +1102,21 @@ class ApplicationUI():
 
 		Label(topView,text="",height=1).grid(row=0,column=0)
 		# 按钮
-		btnSend = Button(topView, text='选择链接文本',width = 15,command=self.tab1_open_link)
+
+		btnSend = Button(topView, text='选择帐户文本',width = 15,command=self.tab1_open_account)
 		btnSend.grid(row=1,column=0,pady=5)
+
+		btnSend = Button(topView, text='选择链接文本',width = 15,command=self.tab1_open_link)
+		btnSend.grid(row=2,column=0,pady=5)
 
 
 		btnCancel = Button(topView, text='选择评论话术', width = 15,command=self.tab1_open_talk)
-		btnCancel.grid(row=2,column=0,pady=5)
-		rightView.grid(row=0, column=2, rowspan=3,padx=2,pady=3)
+		btnCancel.grid(row=3,column=0,pady=5)
+		rightView.grid(row=0, column=2, rowspan=4,padx=2,pady=3)
 
-		Button(topView, text='开始', width = 15, command=self.start_talk).grid(row=3,column=0,pady=5)
-		Button(topView, text='停止', width = 15, command=self.stop_talk).grid(row=4,column=0,pady=5)
-		Button(topView, text='暂停', width = 15, command=self.pasue_talk).grid(row=5,column=0,pady=5)
+		Button(topView, text='开始', width = 15, command=self.start_talk).grid(row=4,column=0,pady=5)
+		Button(topView, text='停止', width = 15, command=self.stop_talk).grid(row=5,column=0,pady=5)
+		Button(topView, text='暂停', width = 15, command=self.pasue_talk).grid(row=6,column=0,pady=5)
 
 
 		bottomView = Frame(rightView)
@@ -1122,23 +1124,30 @@ class ApplicationUI():
 
 		self.tab1_now_count_text = StringVar()
 		self.tab1_sum_count_text = StringVar()
+		self.tab1_sum_account_text = StringVar()
 		self.tab1_style_text = StringVar()
 		self.tab1_add_count_text = StringVar()
 		self.tab1_sum_time_text = StringVar()
 		self.tab1_now_time_text = StringVar()
+		self.tab1_success_count_text = StringVar()
 		Label(bottomView,textvariable=self.tab1_style_text).grid(row=0,column=0,pady=10)
+		Label(bottomView,textvariable=self.tab1_sum_account_text).grid(row=1,column=0,pady=5)
 		Label(bottomView,textvariable=self.tab1_add_count_text).grid(row=2,column=0,pady=5)
 		Label(bottomView,textvariable=self.tab1_sum_count_text).grid(row=3,column=0,pady=5)	## 总评论数
 		Label(bottomView,textvariable=self.tab1_sum_time_text).grid(row=4,column=0,pady=5)	## 总评论花费时间
 		Label(bottomView,textvariable=self.tab1_now_count_text).grid(row=5,column=0,pady=5)	## 当前评论数
-		Label(bottomView,textvariable=self.tab1_now_time_text).grid(row=6,column=0,pady=5)	## 当前评论花费时间
+		Label(bottomView,textvariable=self.tab1_success_count_text).grid(row=6,column=0,pady=5)	## 当前评论数
 
+
+
+		self.tab1_sum_account_text.set("账户总数：0")
 		self.tab1_sum_count_text.set("总评论数：0条")
 		self.tab1_now_count_text.set("当前评论数：0条")
 		self.tab1_style_text.set("当前状态：停止")
 		self.tab1_add_count_text.set("当前未导入文件")
 		self.tab1_sum_time_text.set("总计用时：0秒")
-		self.tab1_now_time_text.set("当前账号用时：0秒")
+		#self.tab1_now_time_text.set("当前账号用时：0秒")
+		self.tab1_success_count_text.set("已成功登录帐号数：0")
 		imgInfo = PhotoImage(file = '1.gif')
 		lblImage = Label(bottomView, image = imgInfo)
 		lblImage.image = imgInfo
@@ -1156,7 +1165,15 @@ class ApplicationUI():
 		self.tab1_now_time = 0		## 当前账号评论时间
 		self.tab1_urls = []
 		self.tab1_talks = all_talks
-		self.tab1_loop_time = 0		
+
+		self.tab1_sum_count_account = 0		## 成功帐号总数
+		self.tab1_now_count_account = 0		## 当前成功账号个数
+		self.tab1_count_account_frozen = 0	## 冻结帐户个数
+		self.tab1_count_account_failed = 0	## 密码错误帐户个数
+		self.tab1_accounts = []
+
+		self.tab1_wait_l = WebDriverWait(self.tab1_driver, 10)
+
 
 	def tab1_open_link(self):
 		if self.tab1_stop != True:
@@ -1185,6 +1202,36 @@ class ApplicationUI():
 			self.tab1_urls.extend(urls)
 			self.tab1_add_count_text.set("当前有效链接数：" + str(len(self.tab1_urls)) + "条")
 			self.tab1_link_list_value.set(tuple(self.tab1_urls))
+
+	def tab1_open_account(self):
+		if self.tab1_stop != True:
+			tkinter.messagebox.showerror("警告","脚本已经在执行，请先\"停止\"脚本在运行导入操作")
+			return
+		if tkinter.messagebox.askyesno("温馨提示","是否要删除之前导入的帐户"):
+			self.tab1_accounts_list_value.set(())
+		filename = tkinter.filedialog.askopenfilename(filetypes = [('TXT', 'txt')])
+		if filename != '':
+			account_files = open(filename, 'r')
+			accounts = []
+			for eachLine in account_files:
+				line = eachLine.strip() ## .decode('gbk', 'utf-8') # no decode in python3
+				accounts.append(line)
+
+			for index, account in enumerate(accounts):
+				if account == '' or account == "\n" or account == "" or account == '\n':
+				# if account == u'' or account == u"\n" or account == u"" or account == u'\n': ## change for python3
+					accounts.remove(account)
+					continue
+			accounts = list(set(accounts))
+			self.tab1_accounts.extend(accounts)
+			self.tab1_sum_count_account = len(self.tab1_accounts)
+			self.tab1_accounts_list_value.set(tuple(self.tab1_accounts))
+			self.tab1_sum_account_text.set("帐户总数："+ str(self.tab1_sum_count_account))
+		pass
+
+
+
+
 
 	def tab1_open_talk(self):
 
@@ -1273,11 +1320,80 @@ class ApplicationUI():
 			self.tab1_driver.get(home_url)  # 打开链接
 
 		self.tab1_style_text.set("当前状态：等待登录")
-		while is_login(self.tab1_driver) == False:
-			if self.tab1_stop == True or self.tab1_pasue == True:
-				self._stop_talk()
-				return
-		self.post_talks()
+		# while is_login(self.tab1_driver) == False:
+		# 	if self.tab1_stop == True or self.tab1_pasue == True:
+		# 		self._stop_talk()
+		# 		return
+		self.tab1_login()
+
+
+
+	def tab1_login(self):
+		self.tab1_driver.refresh()
+		self.tab1_timing = True
+		self.tab1_success_count_account = 0
+		self.tab1_failed_count_account = 0
+		self.tab1_frozen_count_account = 0
+		self.tab_driver = self.tab1_driver
+		autoLogin = dokiLogin(self)
+		# get accounts
+		# accounts = autoLogin.get_account_info("accounts.txt")
+		# accounts_failed = {}
+		for account in self.tab1_accounts:
+			user, pw = account.strip().split("----")
+			autoLogin.to_continue = False
+			# try:
+			if autoLogin.login(user, pw):
+				pass
+			else:
+				fails = 0
+				while fails < 2 and not autoLogin.frame_relogin(user, pw):
+					#print(fails)
+					#print("登录再次失败")
+					fails += 1
+				if fails == 2:
+					autoLogin.write_failed_account(user, pw)
+					self.tab1_failed_count_account += 1
+					#print("该帐号用户名密码不可用，即将换号操作\n")
+			#print(autoLogin.to_continue)
+			if autoLogin.to_continue:
+				autoLogin.write_success_account(user, pw)
+				self.tab1_success_count_account += 1
+				self.post_talks()
+			self.tab1_frozen_count_account = autoLogin.frozen_count
+			autoLogin.driver.delete_all_cookies()
+			self.tab1_driver.get(home_url)
+			#print("\n")
+			# except Exception:
+			# 	autoLogin.write_frozen_account(user, pw)
+			# 	print("该帐号被锁，登录失败\n")
+			# 	autoLogin.driver.delete_all_cookies()
+			# 	self.tab2_driver.get(home_url)
+
+			self.tab1_success_count_text.set("成功登录帐户数："+ str(self.tab1_success_count_account))
+			# self.tab1_failed_count_text.set("密码错误帐户数："+ str(self.tab1_failed_count_account))
+			# self.tab1_frozen_count_text.set("冻结帐户数："+ str(self.tab1_frozen_count_account))
+
+		self.tab1_timing = False
+		self.tab1_driver.delete_all_cookies()
+		self.tab1_driver.get(home_url)
+		## 切换账号
+		self.queue.put("tab1_stop")
+		self.tab1_style_text.set("当前状态：等待下组账号")
+
+		## 如果程序按下暂停键
+		while self.tab1_pasue == True:
+			pass
+
+		# 判断时候按下停止
+		if self.tab1_stop == True:
+			self.tab1_driver.get(home_url)
+			return
+		return
+
+
+
+
 
 		# ## 开一个线程处理登录判断程序
 		# def loop():
@@ -1296,10 +1412,10 @@ class ApplicationUI():
 
 	def post_talks(self):
 
-		self.tab1_now_count = 0
-
-		self.tab1_style_text.set("当前状态：运行")
-		self.tab1_driver.refresh()
+		# self.tab1_now_count = 0
+        #
+		# self.tab1_style_text.set("当前状态：运行")
+		# self.tab1_driver.refresh()
 		# ele_id = "_btn_follow"
 		# param = (By.ID,ele_id)
 		# WebDriverWait(self.tab1_driver,10).until(EC.visibility_of_element_located(param))
@@ -1385,16 +1501,14 @@ class ApplicationUI():
 			##正常运作
 			text.click()
 			talk = random.choice(self.tab1_talks)
+			time.sleep(0.5)
 			text.send_keys(talk)
-			time.sleep(100)
-			WebDriverWait(self.tab1_driver, 10).until(EC.visibility_of_any_elements_located((By.CLASS_NAME, "btn_submit _valid_browser active")))
+			time.sleep(0.5)
 			self.tab1_driver.find_element_by_id("comment_submit").click()
-			self.tab1_loop_time = 0
+
 			## 判断时候提交完毕
 			add_count = max_count
 			while add_count >= max_count:
-				if self.tab1_loop_time > 10:
-					break
 				try:
 					max_count = int(self.tab1_driver.find_element_by_class_name("_comment_num").text)
 				except:
@@ -1437,19 +1551,23 @@ class ApplicationUI():
 		self.tab1_timing = False
 		self.tab1_link_list_value.set(tuple(self.tab1_urls))
 
-		#退出登录 回到主页面
-		self.tab1_driver.delete_all_cookies()
-		self.tab1_driver.get(home_url)
 
-		## 发送消息
-		self.queue.put("tab1_stop")
+		# self.tab2_sum_count_account += 1
+		# self.tab2_now_count_account += 1
 
-		self.tab1_style_text.set("当前状态：更换账号")
-		while is_login(self.tab1_driver) == False:
-			if self.tab1_stop == True or self.tab1_pasue == True:
-				self._stop_talk()
-				return
-		self.post_talks()
+		# #退出登录 回到主页面
+		# self.tab1_driver.delete_all_cookies()
+		# self.tab1_driver.get(home_url)
+        #
+		# ## 发送消息
+		# self.queue.put("tab1_stop")
+        #
+		# self.tab1_style_text.set("当前状态：更换账号")
+		# while is_login(self.tab1_driver) == False:
+		# 	if self.tab1_stop == True or self.tab1_pasue == True:
+		# 		self._stop_talk()
+		# 		return
+		# self.post_talks()
 
 
 	def setup_send_UI(self, view):
@@ -1545,7 +1663,7 @@ class ApplicationUI():
 		self.tab2_start = False
 		self.tab2_pasue = False
 		self.tab2_stop = True
-		self.tab2_sum_count_account = 0		## 当前帐号总数
+		self.tab2_sum_count_account = 0		## 成功帐号总数
 		self.tab2_now_count_account = 0		## 当前成功账号个数
 		self.tab2_count_account_frozen = 0	## 冻结帐户个数
 		self.tab2_count_account_failed = 0	## 密码错误帐户个数
@@ -1556,6 +1674,8 @@ class ApplicationUI():
 		self.tab2_now_time = 0		## 当前账号评论时间
 		self.tab2_accounts = []
 		self.tab2_talks = all_talks
+
+        self.tab2_wait_l = WebDriverWait(self.tab2_driver, 10)
 
 	def start_send(self):
 		if len(self.tab2_talks) == 0:
@@ -1589,7 +1709,7 @@ class ApplicationUI():
 				loopThread.start()
 
 	def stop_send(self):
-		if self.tab2_start == False:
+		if self.tab1_start == False:
 			tkinter.messagebox.showerror("温馨提示","程序未运行!!!")
 			return
 		if tkinter.messagebox.askyesno("温馨提示","确定要停止程序吗"):
@@ -1602,10 +1722,10 @@ class ApplicationUI():
 		self.tab2_style_text.set("当前状态：停止")
 
 	def pasue_send(self):
-		if self.tab2_stop == True:
+		if self.tab1_stop == True:
 			tkinter.messagebox.showerror("温馨提示","当前程序处于停止状态!!")
 			return
-		if self.tab2_start == False:
+		if self.tab1_start == False:
 			tkinter.messagebox.showerror("温馨提示","程序未运行!!!")
 			return
 		if tkinter.messagebox.askyesno("温馨提示","确定要暂停程序吗？"):
@@ -1641,6 +1761,7 @@ class ApplicationUI():
 		self.tab2_success_count_account = 0
 		self.tab2_failed_count_account = 0
 		self.tab2_frozen_count_account = 0
+		self.tab_driver = self.tab2_driver
 		autoLogin = dokiLogin(self)
 		# get accounts
 		# accounts = autoLogin.get_account_info("accounts.txt")
@@ -1680,27 +1801,24 @@ class ApplicationUI():
 			self.tab2_failed_count_text.set("密码错误帐户数："+ str(self.tab2_failed_count_account))
 			self.tab2_frozen_count_text.set("冻结帐户数："+ str(self.tab2_frozen_count_account))
 
-
-			## 如果程序按下暂停键
-			while self.tab2_pasue == True:
-				pass
-
-			# 判断时候按下停止
-			if self.tab2_stop == True:
-				self.tab2_driver.get(home_url)
-				return
-			
-
 		self.tab2_timing = False
 		self.tab2_driver.delete_all_cookies()
 		self.tab2_driver.get(home_url)
 		## 切换账号
 		self.queue.put("tab2_stop")
 		self.tab2_style_text.set("当前状态：等待下组账号")
-		self._stop_send()
-		
 
-    # def account_login(self):
+		## 如果程序按下暂停键
+		while self.tab2_pasue == True:
+			pass
+
+		# 判断时候按下停止
+		if self.tab2_stop == True:
+			self.tab2_driver.get(home_url)
+			return
+		return
+
+
 
 
 	def send_talks(self):
@@ -1740,17 +1858,12 @@ class ApplicationUI():
 			title.click()
 			title_text = random.choice(titles)
 			title.send_keys(title_text)
-			time.sleep(0.5)
 			context_text = random.choice(self.tab2_talks)
 			context = self.tab2_driver.find_element_by_id("note_content")
 			context.click()
 			context.send_keys(context_text)
-			time.sleep(0.5)
-			btn = self.tab2_driver.find_element_by_id("note_pub")
-			try:
-				btn.click()
-			except Exception as e:
-				continue
+			btn = self.tab2_wait.until(EC.element_to_be_clickable((By.ID, "note_pub")))
+			btn.click()
 			while "https://v.qq.com/doki/doki_note/detail" not in self.tab2_driver.current_url:
 				pass
 			## self.tab2_urls.append(self.tab2_driver.current_url)
@@ -1771,7 +1884,8 @@ class ApplicationUI():
 				self.tab2_driver.get(home_url)
 				return
 
-		self.tab2_now_count_account += 1
+		# self.tab2_sum_count_account += 1
+		# self.tab2_now_count_account += 1
 		#print("该帐号发帖完成！")
 
     ## function for opening account file in tab2
